@@ -79,13 +79,9 @@ The converter has gone through **three iterations**:
 
 This document describes the three large language models (LLMs) used to generate the rule sets for the specification-based intrusion detection system (IDS) for **GOOSE / IEC 61850** traffic. Each model produced one version of the rules file (`rules_v1/2/3.py`), enabling a comparative analysis of coverage and detection quality.
 
-All figures below were extracted directly from the notebook runs (`SBRC_2026_LLM_IDS_GOOSE_v{1,2,3}.ipynb`) over the **ERENO 2.0** dataset (200,052 samples: 39,999 normal + 8 attack classes with ~20,000 samples each).
-
-> **Note on the figures.** The files `matriz_regras_ataques_plot_v2.png` and `matriz_regras_ataques_plot_v3.png` were saved with **swapped suffixes**: the figure with 3 bars corresponds to **v3 (Qwen, 3 rules)** and the figure with ~22 bars corresponds to **v2 (Llama, 22 rules)**. This README uses the correct mapping (verified against the notebooks), not the filename order. It's worth renaming the PNGs before reusing them.
-
 ---
 
-## How to read the `rules × classes` matrix
+### How to read the `rules × classes` matrix
 
 Each `matriz_regras_ataques_plot_v*.png` figure is built by `build_rule_class_matrix`:
 
