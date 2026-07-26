@@ -1,11 +1,6 @@
 # From Red Flags to Detection Rules, Revisited
 ## Benchmarking LLM-Generated Rules for Real-Time GOOSE Intrusion Detection on Intel Tofino
 
-Do arquivo Python de regras até o pipeline rodando no `tofino-model`, com contadores confirmando as detecções.
-
-**Ambiente assumido:** `open-p4studio` em `~/open-p4studio`, conforme instalado nas etapas anteriores.
-
-
 **Authors:** Lucas A. Martins¹, Camilla B. Quincozes¹², Silvio E. Quincozes¹², Giovanni Siervo¹, Marcelo Caggiani Luizelli²   
 ¹ Universidade Federal de Uberlândia (UFU) – Uberlândia, Brazil  
 ² Universidade Federal do Pampa (UNIPAMPA) – Alegrete, Brazil  
