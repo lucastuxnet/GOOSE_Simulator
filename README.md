@@ -15,11 +15,13 @@
 
 This project converts Python-defined detection rules into a P4_16/TNA program for the Intel Tofino ASIC (run here on the `tofino-model` simulator) and validates that the generated data plane classifies GOOSE (IEC 61850) traffic exactly as the reference Python oracle does.
 
+It is the **hardware/data-plane extension** of the rule-generation tool published in the Tools Track of **SBRC 2026** (see [Relationship to the SBRC 2026 tool](#relationship-to-the-sbrc-2026-tool)). While the SBRC tool produces detection rules from labeled GOOSE traffic with an LLM-driven pipeline, this repository takes those Python rules and compiles them into a real Tofino data plane, closing the loop from *red-flag extraction* to *line-rate detection*.
+
 | Stage | What happens | Where it runs |
-|---|---|---|
+|-------|--------------|---------------|
 | 1 | Install dependencies and SDE | host |
 | 2 | Environment and virtual interfaces | host |
-| 3 | Conversion: `rules_v1.py` → `goose_ids.p4` + `setup_rules.py` | host |
+| 3 | Conversion: `rules_vN.py` → `goose_ids.p4` + `setup_rules.py` | host |
 | 4 | Semantic validation (Python oracle) | host |
 | 5 | Compile P4 | host |
 | 6 | Populate tables via BF-Runtime | terminal 2 |
@@ -27,6 +29,83 @@ This project converts Python-defined detection rules into a P4_16/TNA program fo
 | 8 | Inject traffic and read counters | terminals 5 and 6 |
 
 Stages 1–5 run without the switch. If something fails there, there is no point in bringing up the model.
+
+---
+
+## Relationship to the SBRC 2026 tool
+
+The rule sets consumed by this simulator (`rules_v1.py`, `rules_v2.py`, `rules_v3.py`) originate from the **LLM-driven rule-generation pipeline** presented at SBRC 2026:
+
+> MARTINS, Lucas A.; QUINCOZES, Camilla B.; SIERVO, Giovanni; QUINCOZES, Silvio E.; LUIZELLI, Marcelo Caggiani. **From Red Flags to Detection Rules: An LLM-driven Pipeline for Real-Time GOOSE Intrusion Detection and Prevention**. *In*: Salão de Ferramentas — Simpósio Brasileiro de Redes de Computadores e Sistemas Distribuídos (SBRC), 44., 2026, Praia do Forte/BA. Anais [...]. Porto Alegre: SBC, 2026. p. 57–65. DOI: [10.5753/sbrc_estendido.2026.23263](https://doi.org/10.5753/sbrc_estendido.2026.23263).
+
+That tool identifies behavioral *red flags* in the ERENO dataset and emits executable Python detection functions. **This repository is the deployment stage**: `rules2p4.py` translates those functions into a P4_16/TNA program plus a BF-Runtime population script, and validates that the compiled data plane reproduces the Python oracle's verdicts bit-for-bit.
+
+---
+
+## Tool Versioning
+
+This section tracks the evolution of the simulator itself and of the converter and rule sets it consumes.
+
+### Simulator releases
+
+| Version | Date | Summary |
+|---|---|---|
+| **v1** | June 14, 2026 | First working end-to-end pipeline: convert (`rules2p4.py`) → validate → compile → populate → inject → read counters on `tofino-model`. |
+| **v2** | July 16, 2026 | Correctness pass fixing issues that were affecting the final results (see [Changes in v2](#changes-in-v2)). This is the version that reproduces the reported metrics. |
+
+> Use **v2 or later**. The v1 pipeline ran end to end but produced detection results skewed by the issues corrected in v2.
+
+### Changes in v2 (July 16, 2026)
+
+The v2 revision corrected defects that were silently distorting the final detection output in v1:
+
+- **Rule-to-class attribution** — per-class named actions (`flag_grayhole`, `flag_injection`, …) were consolidated so that a hit is credited to the correct attack class instead of a generic `flag_attack`, fixing counters that incremented on the wrong entry.
+- **Parser branch parity** — the VLAN-tagged and untagged GOOSE paths now yield identical counters; previously only one branch matched.
+- **Range-boundary precision** — thresholds with more decimal places than the field scale collapsed into the same band; field scales in `field_model.py` were adjusted so `validate.py` reports zero divergence.
+- **Priority uniqueness** — every TCAM entry receives a unique priority (1..N) in rule order, preventing insertion errors on repeated priorities.
+- **Operational ordering** — documented the mandatory *populate → inject → read* order; re-running populate after injection was resetting counters.
+
+### `rules2p4.py` converter history
+
+The converter has gone through **three iterations**:
+
+| Converter rev. | Consumed by | Key change |
+|---|---|---|
+| rev. 1 | `rules_v1.py` | Initial Python AST → P4_16/TNA translation with ternary `detect` table and per-field range (band) tables. |
+| rev. 2 | `rules_v2.py` | Named per-class actions, VLAN/untagged parser parity, corrected priority assignment, scale fixes surfaced by `validate.py`. |
+| rev. 3 | `rules_v3.py` | Threshold/rule-set refinements from a regenerated LLM run; same field model, re-derived ranges (requires recompilation). |
+
+### Rule sets
+
+| File | Description |
+|---|---|
+| `rules_v1.py` | First LLM-generated rule set wired into the simulator (baseline). |
+| `rules_v2.py` | Corrected rule set aligned with the v2 converter changes. |
+| `rules_v3.py` | Latest refined rule set. **Recommended** for reproduction. |
+
+Any of the three can be passed to `rules2p4.py`; the commands below use `rules_v1.py` as the running example — substitute `rules_v3.py` to reproduce the latest results.
+
+---
+
+## Repository layout
+
+```
+.
+├── rules2p4.py          # Converter entry point: rules_vN.py -> goose_ids.p4 + setup_rules.py
+├── rule_parser.py       # Parses the Python rule functions into an internal representation
+├── field_model.py       # FIELDS: width, scale, and sign per GOOSE feature
+├── p4_emitter.py        # Emits the P4_16/TNA program
+├── bfrt_emitter.py      # Emits the BF-Runtime population script
+├── validate.py          # Semantic oracle: compares P4 logic vs. Python over random inputs
+├── gen_test_traffic.py  # Builds the labeled test PCAP and the expected-verdict table
+├── deploy.sh            # Convenience deployment helper
+├── rules_v1.py          # Rule set — baseline
+├── rules_v2.py          # Rule set — corrected
+├── rules_v3.py          # Rule set — latest/refined
+├── build/               # Generated artifacts (goose_ids.p4, setup_rules.py, ...)
+├── LICENSE              # MIT License
+└── README.md            # This file
+```
 
 ---
 
@@ -114,7 +193,7 @@ git clone https://github.com/lucastuxnet/GOOSE_Simulator.git
 cd GOOSE_Simulator/
 ```
 
-Convert the rules and inspect the expansion:
+Convert the rules and inspect the expansion (swap `rules_v1.py` for `rules_v3.py` for the latest set):
 
 ```bash
 python3 rules2p4.py rules_v1.py -o build --prog goose_ids --report | tee saida.txt
@@ -143,11 +222,13 @@ The report lists ranges and bits per field. **It is worth checking before compil
 
 ### Common errors in this stage
 
+> The messages below are the literal strings printed by `rules2p4.py` (in Portuguese); an English gloss is given in parentheses so the table still matches your terminal output.
+
 | Message | Cause | Fix |
 |---|---|---|
-| `campos não mapeados em FIELDS` | Rule uses a new field | Add it to `FIELDS` in `field_model.py` with width, scale, and sign |
-| `disjunção não suportada` | Rule uses `or` | Split it into two `rule_*` functions — the ternary match performs the union |
-| `comparação precisa ser variável/get vs constante` | Arithmetic or comparison between two fields | Rewrite the rule or pre-compute the value |
+| `campos não mapeados em FIELDS` *(fields not mapped in FIELDS)* | Rule uses a new field | Add it to `FIELDS` in `field_model.py` with width, scale, and sign |
+| `disjunção não suportada` *(disjunction not supported)* | Rule uses `or` | Split it into two `rule_*` functions — the ternary match performs the union |
+| `comparação precisa ser variável/get vs constante` *(comparison must be variable/get vs constant)* | Arithmetic or comparison between two fields | Rewrite the rule or pre-compute the value |
 
 ### Validate before compiling
 
@@ -164,7 +245,7 @@ divergência classe ....... 0
 
 A non-zero divergence means the translation does not preserve the semantics of the rules. Do not proceed: the pipeline will classify differently from Python.
 
-The most likely cause is floating-point precision loss — if a new rule introduces a threshold with more decimal places than the field's scale supports, distinct values collapse into the same range. Increase the field's `scale` in `field_model.py` and revalidate.
+The most likely cause is floating-point precision loss — if a new rule introduces a threshold with more decimal places than the field's scale supports, distinct values collapse into the same range. Increase the field's `scale` in `field_model.py` and revalidate. (This class of defect is exactly what the v2 revision corrected.)
 
 ---
 
@@ -348,7 +429,7 @@ In order of likelihood:
 
 ### Counters increment but on the wrong entry
 
-Compare the returned `attack_id` with the table printed by the generator. A divergence here, with `validate.py` passing, points to a difference between the traffic generator's encoding and the control plane's — verify that `GOOSE_FIELDS` in `gen_test_traffic.py` is in the same order as `goose_feat_h` in `goose_ids.p4`.
+Compare the returned `attack_id` with the table printed by the generator. A divergence here, with `validate.py` passing, points to a difference between the traffic generator's encoding and the control plane's — verify that `GOOSE_FIELDS` in `gen_test_traffic.py` is in the same order as `goose_feat_h` in `goose_ids.p4`. (This was one of the v1 defects corrected in v2.)
 
 ### Error inserting entries with a repeated priority
 
@@ -358,16 +439,16 @@ This should not happen: each entry gets a unique priority (1 to 95), assigned in
 
 ## Iteration cycle
 
-When regenerating the rules with the LLM, the short path:
+When regenerating the rules with the LLM, the short path (example uses `rules_v3.py`):
 
 ```bash
 cd ~/GOOSE_Simulator
 
 # 1. convert and check the expansion
-python3 rules2p4.py rules_v2.py -o build --prog goose_ids --report
+python3 rules2p4.py rules_v3.py -o build --prog goose_ids --report
 
 # 2. validate — do not skip this step
-python3 validate.py rules_v2.py -n 100000
+python3 validate.py rules_v3.py -n 100000
 
 # 3. recompile
 cp build/goose_ids.p4 ~/open-p4studio/pkgsrc/p4-examples/p4_16_programs/goose_ids/
@@ -397,3 +478,61 @@ If only the **thresholds** changed and the fields are the same, the P4 changes t
 On Tofino this requires `Register` + `RegisterAction` indexed by a hash of `gocbRef`. **This stage is not generated by the converter.** The traffic generator fills these values directly, which lets you validate the classification logic but does not replace the real extraction.
 
 In production, this module must exist upstream. It is the hardest part of the complete implementation — each `RegisterAction` allows a single read-modify-write operation per stage.
+
+---
+
+## Citation
+
+If you use this simulator or the rules it consumes, please cite the SBRC 2026 tool paper:
+
+> MARTINS, Lucas A.; QUINCOZES, Camilla B.; SIERVO, Giovanni; QUINCOZES, Silvio E.; LUIZELLI, Marcelo Caggiani. **From Red Flags to Detection Rules: An LLM-driven Pipeline for Real-Time GOOSE Intrusion Detection and Prevention**. *In*: Salão de Ferramentas — Simpósio Brasileiro de Redes de Computadores e Sistemas Distribuídos (SBRC), 44., 2026, Praia do Forte/BA. Anais [...]. Porto Alegre: Sociedade Brasileira de Computação, 2026. p. 57–65. ISSN 2177-9384. DOI: 10.5753/sbrc_estendido.2026.23263.
+
+```bibtex
+@inproceedings{martins2026redflags,
+  author    = {Martins, Lucas A. and Quincozes, Camilla B. and Siervo, Giovanni and Quincozes, Silvio E. and Luizelli, Marcelo Caggiani},
+  title     = {From Red Flags to Detection Rules: An LLM-driven Pipeline for Real-Time GOOSE Intrusion Detection and Prevention},
+  booktitle = {Anais Estendidos do XLIV Simp{\'o}sio Brasileiro de Redes de Computadores e Sistemas Distribu{\'i}dos (SBRC) --- Sal{\~a}o de Ferramentas},
+  year      = {2026},
+  pages     = {57--65},
+  publisher = {Sociedade Brasileira de Computa{\c c}{\~a}o (SBC)},
+  address   = {Porto Alegre, RS, Brasil},
+  issn      = {2177-9384},
+  doi       = {10.5753/sbrc_estendido.2026.23263},
+  url       = {https://doi.org/10.5753/sbrc_estendido.2026.23263}
+}
+```
+
+---
+
+## References
+
+### Standards
+
+- International Electrotechnical Commission (2003). *Communication networks and systems in substations — Part 8-1: Specific communication service mapping (SCSM) — Mappings to MMS (ISO 9506-1 and ISO 9506-2) and to ISO/IEC 8802-3.* IET.
+
+### Journal Articles
+
+- Boeding, M., Hempel, M., Sharif, H., Lopez Jr., J., & Perumalla, K. (2023). A flexible OT testbed for evaluating on-device implementations of IEC-61850 GOOSE. *International Journal of Critical Infrastructure Protection*, 43, 100618.
+- Hong, J. & Liu, C. (2019). Intelligent electronic devices with collaborative intrusion detection systems. *IEEE Transactions on Smart Grid*, 10(1), 271–281.
+- Jay, D. (2023). Deception technology based intrusion protection and detection mechanism for digital substations: A game theoretical approach. *IEEE Transactions on Smart Grid*, 3279504.
+
+### Conference Papers
+
+- Bhattacharya, S., Saqib, N., & Govindarasu, M. (2023). ML-based anomaly detection system for IEC 61850 communication in substations. In *IEEE Power & Energy Society Innovative Smart Grid Technologies Conference (ISGT)*.
+- Delhomme, A., Nweke, L. O., & Yildirim Yayilgan, S. (2024). Detecting denial of service attacks in smart grids using machine learning: A study of IEC 61850 protocols. In *SECURWARE 2024*.
+- Girdhar, M., Hong, J., Su, W., Herath, A., & Liu, C.-C. (2023). SDN-based dynamic cybersecurity framework of IEC-61850 communications in smart grid. In *IEEE Conference*.
+- Hong, J., Liu, C., & Govindarasu, M. (2014). Detection of cyber intrusions using network-based multicast messages for substation automation. In *Innovative Smart Grid Technologies (ISGT)*, pp. 1–5. IEEE.
+- Pärssinen, J., Raussi, P., Noponen, S., Opas, M., & Salonen, J. (2023). The digital forensics of cyber-attacks at electrical power grid substation. In *IEEE Conference*.
+- Saqib, N., Bhattacharya, S., Hyder, B., & Govindarasu, M. (2023). Cyber attack impact characterization for IEC 61850-based substations. In *IEEE Power & Energy Society General Meeting (PESGM)*.
+- Yang, C.-W., Galkin, N., Drozdov, D., & Vyatkin, V. (2023). On evaluating R-GOOSE messaging latency over 5G: A Swedish case study. In *IEEE Conference*.
+
+### Datasets
+
+- Biswas, P. P., Tan, H. C., Zhu, Q., Li, Y., Mashima, D., & Chen, B. (2019). A synthesized dataset for cybersecurity study of IEC 61850 based substation. In *2019 IEEE International Conference on Communications, Control, and Computing Technologies for Smart Grids (SmartGridComm)*, pp. 1–7.
+- Quincozes, S. E., Albuquerque, C., Passos, D., & Mossé, D. (2023). ERENO: A framework for generating realistic IEC-61850 intrusion detection datasets for smart grids. *IEEE Transactions on Dependable and Secure Computing*, 21(4), 3851–3865.
+
+---
+
+## License
+
+Distributed under the terms of the MIT License. See `LICENSE`.
