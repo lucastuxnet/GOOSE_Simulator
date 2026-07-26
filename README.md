@@ -1,5 +1,5 @@
 # From Red Flags to Detection Rules, Revisited
-## Benchmarking LLM-Generated Rules for Real-Time GOOSE Intrusion Detection on Intel Tofino
+## Benchmarking LLM-Generated Rules for Real-Time GOOSE Intrusion Detection on P4Studio simulator for Intel Tofino
 
 **Authors:** Lucas A. Martins¹, Camilla B. Quincozes¹², Silvio E. Quincozes¹², Giovanni Siervo¹, Marcelo Caggiani Luizelli²   
 ¹ Universidade Federal de Uberlândia (UFU) – Uberlândia, Brazil  
