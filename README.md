@@ -1,4 +1,5 @@
-# From Red Flags to Detection Rules, Revisited: Benchmarking LLM-Generated Rules for Real-Time GOOSE Intrusion Detection on Intel Tofino
+# From Red Flags to Detection Rules, Revisited
+## Benchmarking LLM-Generated Rules for Real-Time GOOSE Intrusion Detection on Intel Tofino
 
 Do arquivo Python de regras até o pipeline rodando no `tofino-model`, com contadores confirmando as detecções.
 
