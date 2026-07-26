@@ -4,6 +4,15 @@ Do arquivo Python de regras até o pipeline rodando no `tofino-model`, com conta
 
 **Ambiente assumido:** `open-p4studio` em `~/open-p4studio`, conforme instalado nas etapas anteriores.
 
+
+**Authors:** Lucas A. Martins¹, Camilla B. Quincozes¹², Silvio E. Quincozes¹², Giovanni Siervo¹, Marcelo Caggiani Luizelli²   
+¹ Universidade Federal de Uberlândia (UFU) – Uberlândia, Brazil  
+² Universidade Federal do Pampa (UNIPAMPA) – Alegrete, Brazil  
+
+`{lucas.martins, camillaquincozes, sequincozes, gsiervo}@ufu.br`
+
+`{marceloluizelli}@unipampa.edu.br`
+
 ---
 
 ## Visão geral
