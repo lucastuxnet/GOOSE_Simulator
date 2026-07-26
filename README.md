@@ -75,7 +75,7 @@ The converter has gone through **three iterations**:
 | rev. 2 | `rules_v2.py` | Named per-class actions, VLAN/untagged parser parity, corrected priority assignment, scale fixes surfaced by `validate.py`. |
 | rev. 3 | `rules_v3.py` | Threshold/rule-set refinements from a regenerated LLM run; same field model, re-derived ranges (requires recompilation). |
 
-# LLMs and Generated Rule Sets
+## LLMs and Generated Rule Sets
 
 This document describes the three large language models (LLMs) used to generate the rule sets for the specification-based intrusion detection system (IDS) for **GOOSE / IEC 61850** traffic. Each model produced one version of the rules file (`rules_v1/2/3.py`), enabling a comparative analysis of coverage and detection quality.
 
