@@ -510,6 +510,10 @@ If you use this simulator or the rules it consumes, please cite the SBRC 2026 to
 
 - International Electrotechnical Commission (2003). *Communication networks and systems in substations — Part 8-1: Specific communication service mapping (SCSM) — Mappings to MMS (ISO 9506-1 and ISO 9506-2) and to ISO/IEC 8802-3.* IET.
 
+### Base Tool (this work)
+
+- Martins, L. A., Quincozes, C. B., Siervo, G., Quincozes, S. E., & Luizelli, M. C. (2026). From Red Flags to Detection Rules: An LLM-driven Pipeline for Real-Time GOOSE Intrusion Detection and Prevention. In *Anais Estendidos do XLIV Simpósio Brasileiro de Redes de Computadores e Sistemas Distribuídos (SBRC) — Salão de Ferramentas*, pp. 57–65. Porto Alegre: SBC. DOI: 10.5753/sbrc_estendido.2026.23263.
+
 ### Journal Articles
 
 - Boeding, M., Hempel, M., Sharif, H., Lopez Jr., J., & Perumalla, K. (2023). A flexible OT testbed for evaluating on-device implementations of IEC-61850 GOOSE. *International Journal of Critical Infrastructure Protection*, 43, 100618.
