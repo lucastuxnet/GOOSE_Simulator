@@ -75,16 +75,140 @@ The converter has gone through **three iterations**:
 | rev. 2 | `rules_v2.py` | Named per-class actions, VLAN/untagged parser parity, corrected priority assignment, scale fixes surfaced by `validate.py`. |
 | rev. 3 | `rules_v3.py` | Threshold/rule-set refinements from a regenerated LLM run; same field model, re-derived ranges (requires recompilation). |
 
-### Rule sets
+# LLMs and Generated Rule Sets
 
-| File | Description |
-|---|---|
-| `rules_v1.py` | First LLM-generated rule set wired into the simulator (baseline). |
-| `rules_v2.py` | Corrected rule set aligned with the v2 converter changes. |
-| `rules_v3.py` | Latest refined rule set. **Recommended** for reproduction. |
+This document describes the three large language models (LLMs) used to generate the rule sets for the specification-based intrusion detection system (IDS) for **GOOSE / IEC 61850** traffic. Each model produced one version of the rules file (`rules_v1/2/3.py`), enabling a comparative analysis of coverage and detection quality.
+
+All figures below were extracted directly from the notebook runs (`SBRC_2026_LLM_IDS_GOOSE_v{1,2,3}.ipynb`) over the **ERENO 2.0** dataset (200,052 samples: 39,999 normal + 8 attack classes with ~20,000 samples each).
+
+> **Note on the figures.** The files `matriz_regras_ataques_plot_v2.png` and `matriz_regras_ataques_plot_v3.png` were saved with **swapped suffixes**: the figure with 3 bars corresponds to **v3 (Qwen, 3 rules)** and the figure with ~22 bars corresponds to **v2 (Llama, 22 rules)**. This README uses the correct mapping (verified against the notebooks), not the filename order. It's worth renaming the PNGs before reusing them.
+
+---
+
+## How to read the `rules × classes` matrix
+
+Each `matriz_regras_ataques_plot_v*.png` figure is built by `build_rule_class_matrix`:
+
+- **Each row = one IDS rule** (`rule_*`).
+- **The color of each segment = the true class** of the samples that triggered that rule.
+- **The numbers inside the bars = absolute count** of triggers per class.
+
+Therefore, a **single-color** rule is **specific** (fires for only one true class); a **multi-color** rule is **unspecific** (fires across several true classes, contributing to cross-class false positives). Broad coverage with unspecific rules is not necessarily better than lean coverage with specific rules — what matters is the balance between recall and the false-positive rate (FPR).
+
+---
+
+## Rule sets overview
+
+| File | Generator model | Rules loaded | Classes covered | Global FPR |
+|:---|:---|:---:|:---:|:---:|
+| `rules_v1.py` | `openai/gpt-oss-120b` | 21 | 8 / 8 | 11.6% |
+| `rules_v2.py` | `llama-3.3-70b-versatile` | 22 | 8 / 8 | 35.3% |
+| `rules_v3.py` | `qwen/qwen3-32b` | 3 | 2 / 8 | 4.2% |
+
+> **Recommendation:** for publication, use **`rules_v1.py` (GPT-OSS-120B)** as the main configuration. It offers the best **balance between recall and FPR**: it covers all 8 classes with an 11.6% FPR, whereas v2 only reaches higher recall at the cost of a 35.3% FPR (unacceptable for an IDS), and v3, despite the lowest FPR, fails to cover 6 of the 8 classes.
+
+---
+
+## Model details
+
+### 1. `openai/gpt-oss-120b` → `rules_v1.py` (recommended baseline)
+
+| Feature | Detail |
+|:---|:---|
+| Architecture | Mixture of Experts (MoE) — 117B total parameters, ~5.1B active per token |
+| Key differentiator | Deep reasoning with adjustable Chain-of-Thought (CoT) across three levels |
+| Role in generation | Exploratory generator — produced the most balanced set |
+| Rules | **21 rules** covering all **8 attack classes** |
+| Global FPR | **11.6%** (4,625 normal samples flagged as attack) |
+
+**Why it is recommended**
+
+- **Full coverage** of the 8 classes: `grayhole`, `high_StNum`, `injection`, `inverse_replay`, `masquerade_fake_fault`, `masquerade_fake_normal`, `poisoned_high_rate`, `random_replay`.
+- **Only one to reach 100% recall** on `poisoned_high_rate`, plus strong recall on `high_StNum` (93.8%) and `injection` (68.2%).
+- **Built-in FPR filter** during generation: rules above 5% mean FPR were rejected (e.g., `rule_grayhole_sq_stnum`, FPR 7.2% — rejected).
+- **Balance**: global FPR of 11.6%, roughly 3× lower than v2, while keeping full coverage.
+
+**Limitation:** low recall on hard classes — `grayhole` (5.7%) and `random_replay` (12.9%).
+
+---
+
+### 2. `llama-3.3-70b-versatile` → `rules_v2.py`
+
+| Feature | Detail |
+|:---|:---|
+| Architecture | Dense Transformer — 70B parameters with Grouped-Query Attention (GQA) |
+| Key differentiator | Good balance of accuracy, cost, and scalability |
+| Role in generation | Highest raw recall — more aggressive rules |
+| Rules | **22 rules** covering all **8 classes** |
+| Global FPR | **35.3%** (14,121 normal samples flagged as attack) |
+| Cost | Best cost-benefit ($0.59 / 1M input, $0.79 / 1M output) |
+
+**Observations**
+
+- **Highest recall on most classes** — beats v1 on `injection` (87.7%), `masquerade_fake_normal` (82.6%), `masquerade_fake_fault` (58.6%), and `random_replay` (32.2%).
+- **Critical issue:** FPR of **35.3%**. More than a third of normal traffic is classified as attack, which makes it operationally unusable despite the high recall.
+- **Unfavorable trade-off:** the broader rules simultaneously raised both detection and false positives.
+
+---
+
+### 3. `qwen/qwen3-32b` → `rules_v3.py`
+
+| Feature | Detail |
+|:---|:---|
+| Architecture | Dense — 32.8B parameters |
+| Key differentiator | Toggleable "thinking" mode (deep reasoning or fast responses) |
+| Role in generation | Aggressive refiner — drastically reduced the set |
+| Rules | **3 rules** (`rule_injection_sq_st`, `rule_poisoned_high_rate_1`, `rule_poisoned_high_rate_2`) |
+| Classes covered | only **2 / 8** (`injection`, `poisoned_high_rate`) |
+| Global FPR | **4.2%** (the lowest of the three) |
+
+**Observations**
+
+- **Lowest FPR (4.2%)** and good precision on the two classes it covers — `poisoned_high_rate` (93.8%) and `injection` (64.1%).
+- **Critically insufficient coverage:** zeroes out three whole classes — `inverse_replay` (0%), `masquerade_fake_normal` (0%) — and detects very little on `high_StNum` (25.5%), `grayhole` (3.9%), and `random_replay` (4.3%).
+- **Over-refinement:** the process reduced the set to just 3 rules, sacrificing almost all coverage in exchange for a low FPR.
+
+---
+
+## Comparative analysis — recall per class
+
+Recall (TPR) per attack class; **FPR** is the global false-positive rate (measured over normal traffic).
+
+| Class (support) | v1 — GPT-OSS | v2 — Llama | v3 — Qwen |
+|:---|:---:|:---:|:---:|
+| grayhole (19,999) | 5.7% | 31.5% | 3.9% |
+| high_StNum (20,000) | **93.8%** | 93.4% | 25.5% |
+| injection (20,000) | 68.2% | **87.7%** | 64.1% |
+| inverse_replay (20,000) | 51.6% | **56.3%** | 0% |
+| masquerade_fake_fault (20,000) | 33.0% | **58.6%** | 6.1% |
+| masquerade_fake_normal (20,000) | 26.2% | **82.6%** | 0% |
+| poisoned_high_rate (20,000) | **100%** | 98.2% | 93.8% |
+| random_replay (20,000) | 12.9% | **32.2%** | 4.3% |
+| **Classes covered** | **8 / 8** | **8 / 8** | **2 / 8** |
+| **Number of rules** | **21** | **22** | **3** |
+| **Global FPR** | **11.6%** | 35.3% | **4.2%** |
+
+---
+
+## Decision matrix
+
+| If your goal is… | Recommended model | Rule set |
+|:---|:---|:---|
+| **Best recall × FPR balance** | **GPT-OSS-120B** | `rules_v1.py` ⭐ |
+| **Full coverage of all 8 classes with controlled FPR** | **GPT-OSS-120B** | `rules_v1.py` ⭐ |
+| **Publish balanced, defensible results** | **GPT-OSS-120B** | `rules_v1.py` ⭐ |
+| Maximize recall (accepting a 35% FPR) | Llama-3.3-70B | `rules_v2.py` |
+| Minimize FPR / iterate fast (accepting 2/8 coverage) | Qwen3-32B | `rules_v3.py` |
+
+---
+
+## Executive summary
+
+- **GPT-OSS-120B** (`rules_v1.py`) — ⭐ **Recommended.** 21 rules, 8/8 classes, 11.6% FPR. Best recall × FPR balance and the only one to reach 100% on `poisoned_high_rate`.
+- **Llama-3.3-70B** (`rules_v2.py`) — Highest raw recall (beats v1 on 5 of the 8 classes), but a **35.3% FPR** makes it operationally unusable.
+- **Qwen3-32B** (`rules_v3.py`) — Lowest FPR (4.2%), but only **3 rules** covering **2/8 classes**; over-aggressive refinement.
 
 Any of the three can be passed to `rules2p4.py`; the commands below use `rules_v1.py` as the running example — substitute `rules_v3.py` to reproduce the latest results.
-
 ---
 
 ## Repository layout
