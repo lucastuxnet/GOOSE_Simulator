@@ -528,7 +528,6 @@ If you use this simulator or the rules it consumes, please cite the SBRC 2026 to
 
 ### Datasets
 
-- Biswas, P. P., Tan, H. C., Zhu, Q., Li, Y., Mashima, D., & Chen, B. (2019). A synthesized dataset for cybersecurity study of IEC 61850 based substation. In *2019 IEEE International Conference on Communications, Control, and Computing Technologies for Smart Grids (SmartGridComm)*, pp. 1–7.
 - Quincozes, S. E., Albuquerque, C., Passos, D., & Mossé, D. (2023). ERENO: A framework for generating realistic IEC-61850 intrusion detection datasets for smart grids. *IEEE Transactions on Dependable and Secure Computing*, 21(4), 3851–3865.
 
 ---
